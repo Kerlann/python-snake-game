@@ -10,6 +10,8 @@ from src.utils.constants import (
     FPS, GAME_TITLE, SNAKE_SPEED
 )
 from src.game.snake import Snake, Direction
+from src.game.food import Food
+from src.game.score import Score
 
 class Game:
     """
@@ -32,6 +34,12 @@ class Game:
         
         # Création du serpent
         self.snake = Snake()
+        
+        # Création de la nourriture
+        self.food = Food(self.snake.body)
+        
+        # Création du score
+        self.score = Score()
         
         # État du jeu
         self.running = True
@@ -77,8 +85,16 @@ class Game:
             # Déplacer le serpent à intervalle régulier
             current_time = time.time()
             if current_time - self.last_move_time > 1.0 / SNAKE_SPEED:
+                # Vérifier si le serpent a mangé de la nourriture
+                if self.food.is_collision(self.snake.get_head_position()):
+                    self.snake.grow()
+                    self.score.increase()
+                    self.food.respawn(self.snake.body)
+                
+                # Déplacer le serpent
                 if not self.snake.move():
                     self.game_over = True
+                
                 self.last_move_time = current_time
     
     def render(self):
@@ -91,26 +107,34 @@ class Game:
         # Dessiner le serpent
         self.snake.draw(self.screen)
         
+        # Dessiner la nourriture
+        self.food.draw(self.screen)
+        
+        # Afficher le score
+        self.score.draw(self.screen)
+        
         # Afficher message de pause ou de game over
         if self.paused:
             self._render_message("PAUSE - Appuyez sur P pour continuer", WHITE)
         elif self.game_over:
             self._render_message("GAME OVER - Appuyez sur ESPACE pour recommencer", WHITE)
+            self._render_message(f"Score final: {self.score.value}", WHITE, y_offset=40)
         
         # Mise à jour de l'affichage
         pygame.display.flip()
     
-    def _render_message(self, message, color):
+    def _render_message(self, message, color, y_offset=0):
         """
         Affiche un message centré à l'écran.
         
         Args:
             message (str): Le message à afficher
             color (tuple): La couleur RGB du texte
+            y_offset (int, optional): Décalage vertical par rapport au centre. Par défaut 0.
         """
         font = pygame.font.Font(None, 36)
         text = font.render(message, True, color)
-        text_rect = text.get_rect(center=(WINDOW_WIDTH // 2, WINDOW_HEIGHT // 2))
+        text_rect = text.get_rect(center=(WINDOW_WIDTH // 2, WINDOW_HEIGHT // 2 + y_offset))
         self.screen.blit(text, text_rect)
     
     def reset_game(self):
@@ -118,6 +142,8 @@ class Game:
         Réinitialise le jeu pour une nouvelle partie.
         """
         self.snake = Snake()
+        self.food = Food(self.snake.body)
+        self.score.reset()
         self.game_over = False
         self.paused = False
     
