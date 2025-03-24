@@ -14,8 +14,9 @@ class MenuOption(Enum):
     Énumération des options possibles du menu.
     """
     PLAY = 0
-    OPTIONS = 1
-    QUIT = 2
+    HIGHSCORES = 1
+    OPTIONS = 2
+    QUIT = 3
 
 
 class Menu:
@@ -27,7 +28,7 @@ class Menu:
         """
         Initialise un nouveau menu.
         """
-        self.options = ["Jouer", "Options", "Quitter"]
+        self.options = ["Jouer", "Meilleurs Scores", "Options", "Quitter"]
         self.selected_option = 0
         
         # Polices
