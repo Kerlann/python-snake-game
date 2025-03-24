@@ -12,6 +12,18 @@ from src.utils.constants import (
 from src.game.snake import Snake, Direction
 from src.game.food import Food
 from src.game.score import Score
+from src.ui.menu import Menu, MenuOption
+from src.ui.game_over import GameOverScreen, GameOverOption
+
+class GameState:
+    """
+    Énumération des états possibles du jeu.
+    """
+    MENU = 0
+    PLAYING = 1
+    GAME_OVER = 2
+    OPTIONS = 3
+    QUIT = 4
 
 class Game:
     """
@@ -32,6 +44,21 @@ class Game:
         # Horloge pour contrôler le FPS
         self.clock = pygame.time.Clock()
         
+        # État du jeu
+        self.state = GameState.MENU
+        self.running = True
+        self.paused = False
+        
+        # Menu principal
+        self.menu = Menu()
+        
+        # Création des objets du jeu
+        self.reset_game()
+        
+    def reset_game(self):
+        """
+        Réinitialise le jeu pour une nouvelle partie.
+        """
         # Création du serpent
         self.snake = Snake()
         
@@ -41,47 +68,78 @@ class Game:
         # Création du score
         self.score = Score()
         
-        # État du jeu
-        self.running = True
-        self.paused = False
-        self.game_over = False
+        # Écran de Game Over (sera créé quand nécessaire)
+        self.game_over_screen = None
         
         # Timing pour le mouvement du serpent
         self.last_move_time = time.time()
-        
+    
     def process_events(self):
         """
         Gère les événements Pygame (clavier, souris, etc.).
         """
-        for event in pygame.event.get():
+        events = pygame.event.get()
+        
+        for event in events:
             if event.type == pygame.QUIT:
                 self.running = False
-            elif event.type == pygame.KEYDOWN:
-                if event.key == pygame.K_ESCAPE:
-                    self.running = False
-                elif event.key == pygame.K_p:
-                    self.paused = not self.paused
+        
+        # Traitement des événements selon l'état du jeu
+        if self.state == GameState.MENU:
+            option = self.menu.process_events(events)
+            if option == MenuOption.PLAY:
+                self.state = GameState.PLAYING
+            elif option == MenuOption.OPTIONS:
+                self.state = GameState.OPTIONS
+            elif option == MenuOption.QUIT:
+                self.running = False
                 
-                # Contrôles du serpent
-                if not self.game_over:
-                    if event.key == pygame.K_UP:
-                        self.snake.change_direction(Direction.UP)
-                    elif event.key == pygame.K_DOWN:
-                        self.snake.change_direction(Direction.DOWN)
-                    elif event.key == pygame.K_LEFT:
-                        self.snake.change_direction(Direction.LEFT)
-                    elif event.key == pygame.K_RIGHT:
-                        self.snake.change_direction(Direction.RIGHT)
-                
-                # Redémarrer le jeu si Game Over
-                if self.game_over and event.key == pygame.K_SPACE:
-                    self.reset_game()
+        elif self.state == GameState.PLAYING:
+            for event in events:
+                if event.type == pygame.KEYDOWN:
+                    if event.key == pygame.K_ESCAPE:
+                        self.state = GameState.MENU
+                    elif event.key == pygame.K_p:
+                        self.paused = not self.paused
+                    
+                    # Contrôles du serpent
+                    if not self.paused:
+                        if event.key == pygame.K_UP:
+                            self.snake.change_direction(Direction.UP)
+                        elif event.key == pygame.K_DOWN:
+                            self.snake.change_direction(Direction.DOWN)
+                        elif event.key == pygame.K_LEFT:
+                            self.snake.change_direction(Direction.LEFT)
+                        elif event.key == pygame.K_RIGHT:
+                            self.snake.change_direction(Direction.RIGHT)
+        
+        elif self.state == GameState.GAME_OVER:
+            option = self.game_over_screen.process_events(events)
+            if option == GameOverOption.PLAY_AGAIN:
+                self.reset_game()
+                self.state = GameState.PLAYING
+            elif option == GameOverOption.MENU:
+                self.state = GameState.MENU
+            elif option == GameOverOption.QUIT:
+                self.running = False
+        
+        elif self.state == GameState.OPTIONS:
+            # Pour l'instant, juste retourner au menu
+            for event in events:
+                if event.type == pygame.KEYDOWN:
+                    if event.key == pygame.K_ESCAPE:
+                        self.state = GameState.MENU
     
     def update(self):
         """
         Met à jour l'état du jeu.
         """
-        if not self.paused and not self.game_over:
+        dt = self.clock.get_time() / 1000.0  # Temps écoulé en secondes
+        
+        if self.state == GameState.MENU:
+            self.menu.update(dt)
+            
+        elif self.state == GameState.PLAYING and not self.paused:
             # Déplacer le serpent à intervalle régulier
             current_time = time.time()
             if current_time - self.last_move_time > 1.0 / SNAKE_SPEED:
@@ -93,9 +151,13 @@ class Game:
                 
                 # Déplacer le serpent
                 if not self.snake.move():
-                    self.game_over = True
+                    self.game_over_screen = GameOverScreen(self.score.value)
+                    self.state = GameState.GAME_OVER
                 
                 self.last_move_time = current_time
+        
+        elif self.state == GameState.GAME_OVER:
+            self.game_over_screen.update(dt)
     
     def render(self):
         """
@@ -104,21 +166,30 @@ class Game:
         # Effacer l'écran
         self.screen.fill(BLACK)
         
-        # Dessiner le serpent
-        self.snake.draw(self.screen)
+        # Rendu selon l'état du jeu
+        if self.state == GameState.MENU:
+            self.menu.draw(self.screen)
+            
+        elif self.state == GameState.PLAYING:
+            # Dessiner le serpent
+            self.snake.draw(self.screen)
+            
+            # Dessiner la nourriture
+            self.food.draw(self.screen)
+            
+            # Afficher le score
+            self.score.draw(self.screen)
+            
+            # Afficher message de pause
+            if self.paused:
+                self._render_message("PAUSE - Appuyez sur P pour continuer", WHITE)
         
-        # Dessiner la nourriture
-        self.food.draw(self.screen)
+        elif self.state == GameState.GAME_OVER:
+            self.game_over_screen.draw(self.screen)
         
-        # Afficher le score
-        self.score.draw(self.screen)
-        
-        # Afficher message de pause ou de game over
-        if self.paused:
-            self._render_message("PAUSE - Appuyez sur P pour continuer", WHITE)
-        elif self.game_over:
-            self._render_message("GAME OVER - Appuyez sur ESPACE pour recommencer", WHITE)
-            self._render_message(f"Score final: {self.score.value}", WHITE, y_offset=40)
+        elif self.state == GameState.OPTIONS:
+            # Écran d'options simple
+            self._render_message("OPTIONS - Appuyez sur ECHAP pour revenir au menu", WHITE)
         
         # Mise à jour de l'affichage
         pygame.display.flip()
@@ -136,16 +207,6 @@ class Game:
         text = font.render(message, True, color)
         text_rect = text.get_rect(center=(WINDOW_WIDTH // 2, WINDOW_HEIGHT // 2 + y_offset))
         self.screen.blit(text, text_rect)
-    
-    def reset_game(self):
-        """
-        Réinitialise le jeu pour une nouvelle partie.
-        """
-        self.snake = Snake()
-        self.food = Food(self.snake.body)
-        self.score.reset()
-        self.game_over = False
-        self.paused = False
     
     def run(self):
         """
