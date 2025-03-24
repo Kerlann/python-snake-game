@@ -60,6 +60,17 @@ class Snake:
         
         self.direction = new_direction
     
+    def get_next_head_position(self):
+        """
+        Calcule la prochaine position de la tête du serpent sans le déplacer.
+        
+        Returns:
+            tuple: (x, y) coordonnées de la prochaine position de la tête
+        """
+        head_x, head_y = self.body[0]
+        dx, dy = self.direction.value
+        return (head_x + dx, head_y + dy)
+    
     def move(self):
         """
         Déplace le serpent dans sa direction actuelle.
