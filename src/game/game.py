@@ -10,8 +10,9 @@ from src.utils.constants import (
     FPS, GAME_TITLE, SNAKE_SPEED
 )
 from src.game.snake import Snake, Direction
-from src.game.food import Food
+from src.game.food import Food, FoodType
 from src.game.score import Score
+from src.game.level import Level
 from src.ui.menu import Menu, MenuOption
 from src.ui.game_over import GameOverScreen, GameOverOption
 
@@ -55,15 +56,22 @@ class Game:
         # Création des objets du jeu
         self.reset_game()
         
+        # Effets temporaires
+        self.speed_effect_end_time = 0
+        self.speed_multiplier = 1.0
+        
     def reset_game(self):
         """
         Réinitialise le jeu pour une nouvelle partie.
         """
+        # Création du système de niveaux
+        self.level = Level()
+        
         # Création du serpent
         self.snake = Snake()
         
         # Création de la nourriture
-        self.food = Food(self.snake.body)
+        self.food = Food(self.snake.body, level=self.level.current_level)
         
         # Création du score
         self.score = Score()
@@ -73,6 +81,10 @@ class Game:
         
         # Timing pour le mouvement du serpent
         self.last_move_time = time.time()
+        
+        # Réinitialisation des effets
+        self.speed_effect_end_time = 0
+        self.speed_multiplier = 1.0
     
     def process_events(self):
         """
@@ -140,14 +152,58 @@ class Game:
             self.menu.update(dt)
             
         elif self.state == GameState.PLAYING and not self.paused:
+            # Vérifier le passage au niveau suivant
+            if self.level.check_level_up(self.score.value):
+                # Annoncer le nouveau niveau (à implémenter)
+                pass
+            
+            # Vérifier l'expiration des effets temporaires
+            current_time = pygame.time.get_ticks()
+            if current_time >= self.speed_effect_end_time:
+                self.speed_multiplier = 1.0
+            
+            # Vérifier l'expiration de la nourriture spéciale
+            if self.food.should_expire():
+                self.food.respawn(
+                    self.snake.body, 
+                    self.level.obstacles,
+                    self.level.current_level
+                )
+            
+            # Calculer la vitesse actuelle du serpent
+            current_speed = self.level.get_current_speed() * self.speed_multiplier
+            
             # Déplacer le serpent à intervalle régulier
             current_time = time.time()
-            if current_time - self.last_move_time > 1.0 / SNAKE_SPEED:
+            if current_time - self.last_move_time > 1.0 / current_speed:
+                # Vérifier si le serpent se heurte à un obstacle
+                next_head_pos = self.snake.get_next_head_position()
+                if self.level.check_obstacle_collision(next_head_pos):
+                    self.game_over_screen = GameOverScreen(self.score.value)
+                    self.state = GameState.GAME_OVER
+                    return
+                
                 # Vérifier si le serpent a mangé de la nourriture
                 if self.food.is_collision(self.snake.get_head_position()):
                     self.snake.grow()
-                    self.score.increase()
-                    self.food.respawn(self.snake.body)
+                    
+                    # Traiter les effets spéciaux de la nourriture
+                    if self.food.type == FoodType.SPEED:
+                        self.speed_multiplier = 1.5
+                        self.speed_effect_end_time = pygame.time.get_ticks() + 5000  # 5 secondes
+                    elif self.food.type == FoodType.SLOW:
+                        self.speed_multiplier = 0.75
+                        self.speed_effect_end_time = pygame.time.get_ticks() + 5000  # 5 secondes
+                    
+                    # Augmenter le score selon le type de nourriture
+                    self.score.increase(self.food.get_points())
+                    
+                    # Générer une nouvelle nourriture
+                    self.food.respawn(
+                        self.snake.body, 
+                        self.level.obstacles,
+                        self.level.current_level
+                    )
                 
                 # Déplacer le serpent
                 if not self.snake.move():
@@ -171,6 +227,9 @@ class Game:
             self.menu.draw(self.screen)
             
         elif self.state == GameState.PLAYING:
+            # Dessiner les obstacles
+            self.level.draw(self.screen)
+            
             # Dessiner le serpent
             self.snake.draw(self.screen)
             
@@ -183,6 +242,13 @@ class Game:
             # Afficher message de pause
             if self.paused:
                 self._render_message("PAUSE - Appuyez sur P pour continuer", WHITE)
+            
+            # Afficher les effets actifs
+            if pygame.time.get_ticks() < self.speed_effect_end_time:
+                if self.speed_multiplier > 1.0:
+                    self._render_message("VITESSE AUGMENTÉE!", WHITE, y_offset=30)
+                else:
+                    self._render_message("VITESSE RÉDUITE!", WHITE, y_offset=30)
         
         elif self.state == GameState.GAME_OVER:
             self.game_over_screen.draw(self.screen)
