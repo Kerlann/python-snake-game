@@ -16,7 +16,9 @@ from src.game.level import Level
 from src.ui.menu import Menu, MenuOption
 from src.ui.game_over import GameOverScreen, GameOverOption
 from src.ui.highscore_screen import HighScoreScreen, HighScoreScreenOption
+from src.ui.sound_options import SoundOptions, SoundOptionAction
 from src.utils.highscore import HighScore
+from src.utils.sound_manager import SoundManager, SoundEffect
 
 class GameState:
     """
@@ -28,7 +30,8 @@ class GameState:
     OPTIONS = 3
     HIGHSCORES = 4
     NAME_INPUT = 5
-    QUIT = 6
+    SOUND_OPTIONS = 6
+    QUIT = 7
 
 class Game:
     """
@@ -63,6 +66,18 @@ class Game:
         # Écran des meilleurs scores
         self.highscore_screen = HighScoreScreen(self.highscore_manager)
         
+        # Gestionnaire de sons
+        self.sound_manager = SoundManager()
+        
+        # Écran des options sonores
+        self.sound_options = SoundOptions(self.sound_manager)
+        
+        # Pour les tests, créer des sons placeholders
+        self.sound_manager.create_placeholder_sounds()
+        
+        # Lancer la musique du menu
+        self.sound_manager.play_music()
+        
         # Création des objets du jeu
         self.reset_game()
         
@@ -95,6 +110,10 @@ class Game:
         # Réinitialisation des effets
         self.speed_effect_end_time = 0
         self.speed_multiplier = 1.0
+        
+        # Changer la musique pour le jeu
+        if self.state == GameState.PLAYING:
+            self.sound_manager.play_music("game_background.wav")
     
     def process_events(self):
         """
@@ -110,54 +129,81 @@ class Game:
         if self.state == GameState.MENU:
             option = self.menu.process_events(events)
             if option == MenuOption.PLAY:
+                self.reset_game()
                 self.state = GameState.PLAYING
+                self.sound_manager.play_sound(SoundEffect.MENU_SELECT)
+                self.sound_manager.play_music("game_background.wav")
             elif option == MenuOption.HIGHSCORES:
                 self.state = GameState.HIGHSCORES
+                self.sound_manager.play_sound(SoundEffect.MENU_SELECT)
             elif option == MenuOption.OPTIONS:
-                self.state = GameState.OPTIONS
+                self.state = GameState.SOUND_OPTIONS
+                self.sound_manager.play_sound(SoundEffect.MENU_SELECT)
             elif option == MenuOption.QUIT:
                 self.running = False
+                self.sound_manager.play_sound(SoundEffect.MENU_SELECT)
                 
         elif self.state == GameState.PLAYING:
             for event in events:
                 if event.type == pygame.KEYDOWN:
                     if event.key == pygame.K_ESCAPE:
                         self.state = GameState.MENU
+                        self.sound_manager.play_music()  # Retour à la musique du menu
                     elif event.key == pygame.K_p:
                         self.paused = not self.paused
                     
                     # Contrôles du serpent
                     if not self.paused:
+                        direction_changed = False
                         if event.key == pygame.K_UP:
                             self.snake.change_direction(Direction.UP)
+                            direction_changed = True
                         elif event.key == pygame.K_DOWN:
                             self.snake.change_direction(Direction.DOWN)
+                            direction_changed = True
                         elif event.key == pygame.K_LEFT:
                             self.snake.change_direction(Direction.LEFT)
+                            direction_changed = True
                         elif event.key == pygame.K_RIGHT:
                             self.snake.change_direction(Direction.RIGHT)
+                            direction_changed = True
+                            
+                        if direction_changed:
+                            self.sound_manager.play_sound(SoundEffect.MOVE)
         
         elif self.state == GameState.GAME_OVER:
             option = self.game_over_screen.process_events(events)
             if option == GameOverOption.PLAY_AGAIN:
                 self.reset_game()
                 self.state = GameState.PLAYING
+                self.sound_manager.play_sound(SoundEffect.MENU_SELECT)
+                self.sound_manager.play_music("game_background.wav")
             elif option == GameOverOption.MENU:
                 self.state = GameState.MENU
+                self.sound_manager.play_sound(SoundEffect.MENU_SELECT)
+                self.sound_manager.play_music()  # Retour à la musique du menu
             elif option == GameOverOption.QUIT:
                 self.running = False
+                self.sound_manager.play_sound(SoundEffect.MENU_SELECT)
         
         elif self.state == GameState.HIGHSCORES:
             option = self.highscore_screen.process_events(events)
             if option == HighScoreScreenOption.BACK:
                 self.state = GameState.MENU
+                self.sound_manager.play_sound(SoundEffect.MENU_SELECT)
             elif option == HighScoreScreenOption.RESET:
                 self.highscore_manager.reset_scores()
+                self.sound_manager.play_sound(SoundEffect.MENU_SELECT)
         
         elif self.state == GameState.NAME_INPUT:
             # Gérer la saisie du nom pour le meilleur score
             if self.highscore_manager.process_input(events):
                 self.state = GameState.HIGHSCORES
+        
+        elif self.state == GameState.SOUND_OPTIONS:
+            option = self.sound_options.process_events(events)
+            if option == SoundOptionAction.BACK:
+                self.state = GameState.MENU
         
         elif self.state == GameState.OPTIONS:
             # Pour l'instant, juste retourner au menu
@@ -165,6 +211,7 @@ class Game:
                 if event.type == pygame.KEYDOWN:
                     if event.key == pygame.K_ESCAPE:
                         self.state = GameState.MENU
+                        self.sound_manager.play_sound(SoundEffect.MENU_SELECT)
     
     def update(self):
         """
@@ -178,8 +225,8 @@ class Game:
         elif self.state == GameState.PLAYING and not self.paused:
             # Vérifier le passage au niveau suivant
             if self.level.check_level_up(self.score.value):
-                # Annoncer le nouveau niveau (à implémenter)
-                pass
+                # Jouer le son de passage de niveau
+                self.sound_manager.play_sound(SoundEffect.LEVEL_UP)
             
             # Vérifier l'expiration des effets temporaires
             current_time = pygame.time.get_ticks()
@@ -209,6 +256,9 @@ class Game:
                 # Vérifier si le serpent a mangé de la nourriture
                 if self.food.is_collision(self.snake.get_head_position()):
                     self.snake.grow()
+                    
+                    # Jouer le son de consommation de nourriture
+                    self.sound_manager.play_sound(SoundEffect.EAT)
                     
                     # Traiter les effets spéciaux de la nourriture
                     if self.food.type == FoodType.SPEED:
@@ -242,6 +292,12 @@ class Game:
         """
         Gère la fin de partie et vérifie les meilleurs scores.
         """
+        # Jouer le son de game over
+        self.sound_manager.play_sound(SoundEffect.GAME_OVER)
+        
+        # Changer pour la musique du menu
+        self.sound_manager.play_music()
+        
         # Vérifier si c'est un meilleur score
         if self.highscore_manager.is_high_score(self.score.value):
             # Demander le nom du joueur
@@ -295,6 +351,9 @@ class Game:
         
         elif self.state == GameState.NAME_INPUT:
             self.highscore_manager.draw_input(self.screen)
+        
+        elif self.state == GameState.SOUND_OPTIONS:
+            self.sound_options.draw(self.screen)
         
         elif self.state == GameState.OPTIONS:
             # Écran d'options simple
