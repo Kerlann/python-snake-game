@@ -15,6 +15,8 @@ from src.game.score import Score
 from src.game.level import Level
 from src.ui.menu import Menu, MenuOption
 from src.ui.game_over import GameOverScreen, GameOverOption
+from src.ui.highscore_screen import HighScoreScreen, HighScoreScreenOption
+from src.utils.highscore import HighScore
 
 class GameState:
     """
@@ -24,7 +26,9 @@ class GameState:
     PLAYING = 1
     GAME_OVER = 2
     OPTIONS = 3
-    QUIT = 4
+    HIGHSCORES = 4
+    NAME_INPUT = 5
+    QUIT = 6
 
 class Game:
     """
@@ -52,6 +56,12 @@ class Game:
         
         # Menu principal
         self.menu = Menu()
+        
+        # Gestionnaire de meilleurs scores
+        self.highscore_manager = HighScore()
+        
+        # Écran des meilleurs scores
+        self.highscore_screen = HighScoreScreen(self.highscore_manager)
         
         # Création des objets du jeu
         self.reset_game()
@@ -101,6 +111,8 @@ class Game:
             option = self.menu.process_events(events)
             if option == MenuOption.PLAY:
                 self.state = GameState.PLAYING
+            elif option == MenuOption.HIGHSCORES:
+                self.state = GameState.HIGHSCORES
             elif option == MenuOption.OPTIONS:
                 self.state = GameState.OPTIONS
             elif option == MenuOption.QUIT:
@@ -134,6 +146,18 @@ class Game:
                 self.state = GameState.MENU
             elif option == GameOverOption.QUIT:
                 self.running = False
+        
+        elif self.state == GameState.HIGHSCORES:
+            option = self.highscore_screen.process_events(events)
+            if option == HighScoreScreenOption.BACK:
+                self.state = GameState.MENU
+            elif option == HighScoreScreenOption.RESET:
+                self.highscore_manager.reset_scores()
+        
+        elif self.state == GameState.NAME_INPUT:
+            # Gérer la saisie du nom pour le meilleur score
+            if self.highscore_manager.process_input(events):
+                self.state = GameState.HIGHSCORES
         
         elif self.state == GameState.OPTIONS:
             # Pour l'instant, juste retourner au menu
@@ -179,8 +203,7 @@ class Game:
                 # Vérifier si le serpent se heurte à un obstacle
                 next_head_pos = self.snake.get_next_head_position()
                 if self.level.check_obstacle_collision(next_head_pos):
-                    self.game_over_screen = GameOverScreen(self.score.value)
-                    self.state = GameState.GAME_OVER
+                    self._handle_game_over()
                     return
                 
                 # Vérifier si le serpent a mangé de la nourriture
@@ -207,13 +230,27 @@ class Game:
                 
                 # Déplacer le serpent
                 if not self.snake.move():
-                    self.game_over_screen = GameOverScreen(self.score.value)
-                    self.state = GameState.GAME_OVER
+                    self._handle_game_over()
+                    return
                 
                 self.last_move_time = current_time
         
         elif self.state == GameState.GAME_OVER:
             self.game_over_screen.update(dt)
+    
+    def _handle_game_over(self):
+        """
+        Gère la fin de partie et vérifie les meilleurs scores.
+        """
+        # Vérifier si c'est un meilleur score
+        if self.highscore_manager.is_high_score(self.score.value):
+            # Demander le nom du joueur
+            self.highscore_manager.start_input(self.score.value)
+            self.state = GameState.NAME_INPUT
+        else:
+            # Afficher l'écran de game over normal
+            self.game_over_screen = GameOverScreen(self.score.value)
+            self.state = GameState.GAME_OVER
     
     def render(self):
         """
@@ -252,6 +289,12 @@ class Game:
         
         elif self.state == GameState.GAME_OVER:
             self.game_over_screen.draw(self.screen)
+        
+        elif self.state == GameState.HIGHSCORES:
+            self.highscore_screen.draw(self.screen)
+        
+        elif self.state == GameState.NAME_INPUT:
+            self.highscore_manager.draw_input(self.screen)
         
         elif self.state == GameState.OPTIONS:
             # Écran d'options simple
