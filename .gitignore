@@ -1,0 +1,39 @@
+# Python bytecode
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Distribution / packaging
+dist/
+build/
+*.egg-info/
+
+# Pytest
+.pytest_cache/
+.coverage
+
+# Virtual environments
+venv/
+env/
+ENV/
+
+# IDE files
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Logs
+logs/*
+!logs/.gitkeep
+
+# Profile results
+*.prof
+
+# Saved games / scores
+*.json
+highscores.json
+
+# System files
+.DS_Store
+Thumbs.db
