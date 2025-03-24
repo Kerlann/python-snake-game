@@ -1,0 +1,28 @@
+# Documentation
+include README.md
+include LICENSE
+include CHANGELOG.md
+include CONTRIBUTING.md
+
+# Configuration
+include requirements.txt
+include setup.py
+include *.py
+
+# Source
+recursive-include src *
+
+# Tests
+recursive-include tests *.py
+
+# Assets
+recursive-include assets *
+recursive-include docs *
+
+# Exclure les fichiers temporaires
+global-exclude *.py[cod]
+global-exclude __pycache__
+global-exclude *.so
+global-exclude .DS_Store
+global-exclude *.log
+global-exclude *.prof
