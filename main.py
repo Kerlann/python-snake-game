@@ -6,6 +6,15 @@ Jeu Snake en Python avec Pygame
 Point d'entrée principal du programme
 """
 
-if __name__ == "__main__":
+from src.game.game import Game
+
+def main():
+    """
+    Fonction principale qui initialise et lance le jeu.
+    """
     print("Initialisation du jeu Snake...")
-    # Le code sera implémenté au fur et à mesure du développement
+    game = Game()
+    game.run()
+
+if __name__ == "__main__":
+    main()
